@@ -1,0 +1,451 @@
+query GetMemberHomePage {
+    MemberHomePage: MemberHomepage {
+      pageContent {
+        ...ContentHero
+        ...SkipTo
+        ...FeaturedCarousel
+        ...SeriesCarousel
+        ...ForYou
+        ...CategoriesGrid
+        ...PopularCollectionsCarousel
+        ...LatestCarousel
+        ...ContinueWatchingV2
+        ...WatchCarousel
+        ...ListenCarousel
+        ...YourInterests
+        ...ReadCarousel
+        ...HeroCarousel
+        ...ButtonRow
+      }
+    }
+  }
+
+
+  fragment ContentHero on ContentHero {
+    id
+    ctaLabel
+    display
+    content {
+      id
+      title
+      slug
+      contentTier {
+        id
+        name
+        planLevel
+      }
+      primaryCollection {
+        id
+        slug
+        name
+      }
+      thumbnail {
+        id
+        sizes {
+          landscape2x {
+            url
+          }
+        }
+      }
+    }
+  }
+
+
+  fragment SkipTo on SkipTo {
+    id
+    links {
+      relationTo
+      value {
+        ... on Category {
+          __typename
+          id
+          categoryName: name
+          slug
+        }
+        ... on Collection {
+          __typename
+          id
+          collectionName: name
+          slug
+        }
+      }
+    }
+  }
+
+
+  fragment FeaturedCarousel on FeaturedCarousel {
+    id
+    carouselTitle: title
+    color
+    carouselContent: content {
+      ...ContentCard
+    }
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment ContentCard on Content {
+    id
+    title
+    duration
+    slug
+    contentType
+    contentTier {
+      id
+      name
+      planLevel
+    }
+    primaryCollection {
+      id
+      name
+      slug
+      isPodcast
+      episodeSortPreference
+    }
+    thumbnail {
+      id
+      sizes {
+        landscape {
+          url
+        }
+        square {
+          url
+        }
+      }
+    }
+    podcastThumbnail {
+      sizes {
+        square {
+          url
+        }
+      }
+    }
+    episodeNumber
+    releaseDate
+    comingSoonTagDate
+    contentVisibleAt
+    updatedAt
+  }
+
+
+  fragment SeriesCarousel on SeriesCarousel {
+    id
+    carouselTitle: title
+    seriesColor: color
+    cta {
+      link
+      title: text
+    }
+    collections: content {
+      id
+      name
+      slug
+      thumbnail {
+        id
+        sizes {
+          portrait {
+            url
+          }
+        }
+      }
+    }
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment ForYou on ForYou {
+    id
+    title
+    forYouColor: color
+    collections {
+      id
+      isSeries
+      isPodcast
+      slug
+      name
+      thumbnail {
+        id
+        sizes {
+          square {
+            url
+          }
+          portrait {
+            url
+          }
+          landscape {
+            url
+          }
+        }
+      }
+    }
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment CategoriesGrid on CategoriesGrid {
+    id
+    title
+    gridColor: color
+    categories {
+      id
+      name
+      slug
+    }
+  }
+
+
+  fragment PopularCollectionsCarousel on PopularCollectionsCarousel {
+    id
+    carouselTitle: title
+    color
+    cta {
+      link
+      title: text
+    }
+    collections: content {
+      id
+      name
+      slug
+      itemCount
+      isSeries
+      publishedAt
+      releaseDate
+      thumbnail {
+        id
+        sizes {
+          portrait {
+            url
+          }
+          landscape {
+            url
+          }
+        }
+      }
+    }
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment LatestCarousel on LatestCarousel {
+    id
+    carouselTitle: title
+    latestColor: color
+    cta {
+      link
+      title
+    }
+    latestCarouselContent: content {
+      ...ContentCard
+    }
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment ContinueWatchingV2 on ContinueWatchingV2 {
+    id
+    color
+    limit
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment WatchCarousel on WatchCarousel {
+    id
+    carouselTitle: title
+    cta {
+      link
+      title
+    }
+    carouselContent: content {
+      ...ContentCard
+    }
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment ListenCarousel on ListenCarousel {
+    id
+    carouselTitle: title
+    cta {
+      link
+      title
+    }
+    carouselContent: content {
+      ...ContentCard
+    }
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment YourInterests on YourInterests {
+    id
+    title
+    yourInterestsColor: color
+    interestsCollections {
+      id
+      content {
+        id
+        name
+        slug
+        itemCount
+        isSeries
+        thumbnail {
+          id
+          sizes {
+            portrait {
+              url
+            }
+            landscape {
+              url
+            }
+          }
+        }
+      }
+    }
+    interestsContent {
+      id
+      content {
+        ...ContentCard
+      }
+    }
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment ReadCarousel on ReadCarousel {
+    id
+    carouselTitle: title
+    cta {
+      link
+      title
+    }
+    carouselContent: content {
+      ...ContentCard
+    }
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment HeroCarousel on HeroCarousel {
+    id
+    carouselColor: color
+    duration
+    title
+    cta {
+      text
+      link
+      newTab
+    }
+    items {
+      relationTo
+      value {
+        ... on Content {
+          __typename
+          id
+          title
+          slug
+          contentTier {
+            id
+            name
+            planLevel
+          }
+          primaryCollection {
+            id
+            slug
+            name
+          }
+          thumbnail {
+            id
+            sizes {
+              landscape2x {
+                url
+              }
+            }
+          }
+        }
+        ... on Collection {
+          __typename
+          id
+          name
+          slug
+          ottLandscape16x9 {
+            id
+            sizes {
+              landscape2x {
+                url
+              }
+            }
+          }
+          thumbnail {
+            id
+            sizes {
+              landscape2x {
+                url
+              }
+            }
+          }
+        }
+      }
+    }
+    excludedPlatforms {
+      ios
+      android
+      web
+    }
+  }
+
+
+  fragment ButtonRow on ButtonRow {
+    id
+    color
+    alignment
+    layout
+    buttons {
+      id
+      variant
+      label
+      href
+      visibility
+      newTab
+    }
+  }

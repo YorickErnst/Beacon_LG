@@ -1,0 +1,10 @@
+{
+    "id": "org.home.beacon.service",
+    "description": "Beacon app: calls to Beacon's CMS and sign-in",
+    "services": [
+        {
+            "name": "org.home.beacon.service",
+            "description": "Beacon app: calls to Beacon's CMS and sign-in"
+        }
+    ]
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Beacon</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="screen"></div>
+<div id="player" hidden>
+  <video id="video" preload="auto"></video>
+  <div id="cue"></div>
+  <div id="osd">
+    <div id="osd-title"></div>
+    <div id="osd-bar"><div id="osd-fill"></div></div>
+    <div id="osd-time"></div>
+    <div id="osd-buttons"></div>
+  </div>
+  <div id="spinner"></div>
+  <div id="upnext" hidden></div>
+</div>
+<div id="toast" hidden></div>
+<script src="home-query.js"></script>
+<script src="backend.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
