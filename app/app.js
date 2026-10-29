@@ -430,6 +430,7 @@
     title: document.getElementById('osd-title'), fill: document.getElementById('osd-fill'), time: document.getElementById('osd-time'),
     buttons: document.getElementById('osd-buttons'), upnext: document.getElementById('upnext'),
     slug: null, id: null, osdTimer: null, lastReport: 0, captions: [], capIndex: -1, cues: [], nextTimer: null, next: null,
+    sources: [], source: 0, startAt: 0, opened: 0, stall: null,   // streams to try in turn, which one plays, resume point, which opening
   };
 
   function startPlayback(slug, opts) {
@@ -456,15 +457,35 @@
     clearInterval(P.nextTimer);
     P.el.hidden = false;
     P.el.className = 'wait';
-    const startAt = opts.fromStart ? 0 : (d.resumeAt || 0);
-    P.video.src = d.url;
-    P.video.onloadedmetadata = () => { if (startAt > 5) P.video.currentTime = startAt; };
-    P.video.play().catch(() => {});
+    P.startAt = opts.fromStart ? 0 : (d.resumeAt || 0);
+    const opened = ++P.opened;
+    // the best stream only, then all streams best first (see B.fullQuality), then the stream as Beacon gives it
+    B.fullQuality(d.url).then(local => {
+      if (opened !== P.opened || P.el.hidden) return;
+      P.sources = local.concat([d.url]);
+      P.source = 0;
+      loadVideo(P.startAt);
+    });
     drawButtons();
     showOsd();
   }
+  function loadVideo(startAt) {
+    clearTimeout(P.stall);
+    P.video.src = P.sources[P.source];
+    P.video.onloadedmetadata = () => { if (startAt > 5) P.video.currentTime = startAt; };
+    P.video.play().catch(() => {});
+  }
+  // on to the next stream in P.sources, from where playback was; false if there is none
+  function nextSource() {
+    if (P.source + 1 >= P.sources.length) return false;
+    P.source++;
+    loadVideo(P.video.currentTime > 5 ? P.video.currentTime : P.startAt);
+    return true;
+  }
   function closePlayer() {
     report(true);
+    clearTimeout(P.stall);
+    P.sources = [];
     P.video.pause();
     P.video.removeAttribute('src');
     P.video.load();
@@ -560,12 +581,22 @@
       if (P.cue.textContent !== text) P.cue.textContent = text;
     }
   });
-  P.video.addEventListener('waiting', () => P.el.classList.add('wait'));
-  P.video.addEventListener('playing', () => { P.el.classList.remove('wait'); drawButtons(); });
+  // The best-only stream can't step down: if it stalls for STALL_MS (slow connection), go on to the copy with all
+  // streams, which the player can adapt
+  const STALL_MS = 5000;
+  P.video.addEventListener('waiting', () => {
+    P.el.classList.add('wait');
+    clearTimeout(P.stall);
+    if (P.source === 0 && P.sources.length > 2) {
+      P.stall = setTimeout(() => { if (!P.el.hidden && P.video.readyState < 3) nextSource(); }, STALL_MS);
+    }
+  });
+  P.video.addEventListener('playing', () => { clearTimeout(P.stall); P.el.classList.remove('wait'); drawButtons(); });
   P.video.addEventListener('pause', () => { drawButtons(); showOsd(true); });
   // The usual cause: an ad blocker or Pi-hole on the network blocking JW Player, which hosts Beacon's video
   P.video.addEventListener('error', () => {
     if (P.el.hidden) return;
+    if (nextSource()) return;   // a local copy failed: try the next stream
     toast('Playback failed. If you use an ad blocker or Pi-hole, allow jwplayer.com, jwpsrv.com and jwpcdn.com.');
     closePlayer();
   });

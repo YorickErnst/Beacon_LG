@@ -40,26 +40,26 @@ official Beacon app. Everything runs on the TV itself: no proxy server, no Docke
 
 ## Install
 
-The ready-made package is in [`dist/`](dist/): `org.home.beacon_1.1.0_all.ipk`.
+The ready-made package is in [`dist/`](dist/): `org.home.beacon_1.1.1_all.ipk`.
 
 ### Option A: webOS Dev Manager (easiest)
 
 1. Install [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop) on your computer.
 2. Add your TV: a rooted TV, or Developer Mode with the passphrase from LG's Developer Mode app.
-3. Open *Apps* → *Install*, choose `dist/org.home.beacon_1.1.0_all.ipk`.
+3. Open *Apps* → *Install*, choose `dist/org.home.beacon_1.1.1_all.ipk`.
 
 ### Option B: LG's command-line tools (Developer Mode or rooted)
 
 ```bash
 npm install -g @webos-tools/cli
 ares-setup-device            # add your TV (follow the prompts)
-ares-install --device <your-tv-name> dist/org.home.beacon_1.1.0_all.ipk
+ares-install --device <your-tv-name> dist/org.home.beacon_1.1.1_all.ipk
 ```
 
 ### Option C: rooted TV over SSH or telnet
 
 ```bash
-scp dist/org.home.beacon_1.1.0_all.ipk root@<tv-ip>:/tmp/beacon.ipk
+scp dist/org.home.beacon_1.1.1_all.ipk root@<tv-ip>:/tmp/beacon.ipk
 ssh root@<tv-ip> 'luna-send -w 60000 -i luna://com.webos.appInstallService/dev/install "{\"id\":\"org.home.beacon\",\"ipkUrl\":\"/tmp/beacon.ipk\",\"subscribe\":true}"'
 ```
 
@@ -109,7 +109,8 @@ This produces an equivalent package. I haven't tested this route; the PowerShell
   home page), regenerate `app/home-query.js` with `pwsh tools/make-home-query.ps1`.
 - **Desk test:** try the app in a desktop browser without a TV. Run `python tools/desk-test.py` (Python 3), then
   open http://localhost:8799 in a 1920×1080 window. It serves `app/` and plays the part of the TV service. Sign-in,
-  browsing, search and stream addresses all work. Video playback depends on your browser's HLS support.
+  browsing, search and stream addresses all work. Video playback depends on your browser's HLS support. The desk
+  test has no `playlist` method, so it always plays the stream as JW Player lists it.
 
 ## How it works
 
@@ -123,12 +124,14 @@ This produces an equivalent package. I haven't tested this route; the PowerShell
  │              index, Beacon   │       │  gql   → Beacon CMS (GraphQL)        │──► critrole-beacon-production-
  │              data per screen │       │  token → Memberful OAuth (sign-in)   │──► pocketbeacon.memberful.com
  └──────────────┬───────────────┘       │  text  → caption files (JW Player)   │──► *.jwplayer.com
+                │                       │  playlist → stream list, best first, │──► cdn.jwplayer.com
+                │                       │             served on 127.0.0.1      │
                 │                       └──────────────────────────────────────┘
-                └── <video> plays the HLS stream straight from JW Player (no DRM)
+                └── <video> plays the HLS stream from JW Player (no DRM)
 ```
 
 - **Why a service.** Beacon's GraphQL API only accepts `https://beacon.tv` as a browser origin, so the app's web
-  view can't call it. The small stateless service in the same package makes those HTTPS calls; everything else
+  view can't call it. The small service in the same package makes those HTTPS calls; everything else
   lives in the app.
 - **Sign-in.** The service uses Memberful's password grant with beacon.tv's client ID, as Beacon's own TV apps do.
   The web sign-in form is behind a bot check. Tokens are kept in the app's `localStorage` (`beacon.auth`) and
@@ -139,6 +142,13 @@ This produces an equivalent package. I haven't tested this route; the PowerShell
   whole words, is merged in.
 - **Video.** Beacon is asked for streams without DRM (`x-supports-drm: false`). Those are plain HLS, which the
   TV's player handles natively. Progress is reported to Beacon the way beacon.tv reports it.
+- **Full quality from the start.** JW Player's master playlist lists the 640×360 stream first, and the TV's player
+  starts with the first stream it reads, so videos began blurry. Sorting alone doesn't fix it: about 4 s in, LG's
+  player always drops to the lowest stream it is offered for a few seconds. So the service's `playlist` method
+  fetches the master playlist and serves two copies on `127.0.0.1` for a few minutes: one with only the best
+  stream, and one with all streams, best first. The app plays the best-only copy. If that stalls for 5 s (a slow
+  connection), it switches to the full copy, where the player can step down. If a copy fails, or the service
+  can't provide one, it plays the original playlist. The video data always comes straight from JW Player.
 - **Older engines.** webOS 6 apps run on Chromium 79 and services on Node.js 8, so the code avoids newer syntax:
   no optional chaining or `??` in the app, and no `fetch` or object spread in the service.
 
@@ -151,7 +161,7 @@ This produces an equivalent package. I haven't tested this route; the PowerShell
 | `app/app.js` | screens, focus navigation for the remote, sign-in form, player |
 | `app/backend.js` | sign-in and tokens, Beacon queries, catalogue index and search, data for each screen |
 | `app/home-query.js` | beacon.tv's home page query (generated) |
-| `service/service.js` | the three service methods `gql`, `token` and `text` |
+| `service/service.js` | the four service methods `gql`, `token`, `text` and `playlist` |
 | `service/services.json`, `service/package.json` | service registration |
 | `tools/` | build script, query generator, desk test |
 | `dist/` | the built `.ipk` |

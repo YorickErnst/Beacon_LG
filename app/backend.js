@@ -568,6 +568,11 @@ window.Backend = (function () {
       captions: captionsOf(video),
     };
   }
+  // Local copies of the stream's playlist from the app's service (see service.js): [best stream only, all streams
+  // best first]; [] if that fails, then the original is used
+  function fullQuality(url) {
+    return call('playlist', { url: url }, 8000).then(r => [r.best, r.url].filter(Boolean)).catch(() => []);
+  }
   // A caption file's text (fetched by the service: JW Player's caption host sends no CORS headers)
   function captionText(url) {
     return call('text', { url: url }).then(r => {
@@ -605,7 +610,7 @@ window.Backend = (function () {
 
   return {
     isSignedIn: isSignedIn, signIn: signIn, signOut: signOut, status: status, ensureIndex: ensureIndex,
-    home: home, seriesList: seriesList, collection: collection, content: content, play: play, captionText: captionText,
+    home: home, seriesList: seriesList, collection: collection, content: content, play: play, fullQuality: fullQuality, captionText: captionText,
     search: search, suggest: suggest, progress: progress,
   };
 })();
