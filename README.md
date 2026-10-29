@@ -40,26 +40,26 @@ official Beacon app. Everything runs on the TV itself: no proxy server, no Docke
 
 ## Install
 
-The ready-made package is in [`dist/`](dist/): `org.home.beacon_1.1.1_all.ipk`.
+The ready-made package is in [`dist/`](dist/): `org.home.beacon_1.1.2_all.ipk`.
 
 ### Option A: webOS Dev Manager (easiest)
 
 1. Install [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop) on your computer.
 2. Add your TV: a rooted TV, or Developer Mode with the passphrase from LG's Developer Mode app.
-3. Open *Apps* → *Install*, choose `dist/org.home.beacon_1.1.1_all.ipk`.
+3. Open *Apps* → *Install*, choose `dist/org.home.beacon_1.1.2_all.ipk`.
 
 ### Option B: LG's command-line tools (Developer Mode or rooted)
 
 ```bash
 npm install -g @webos-tools/cli
 ares-setup-device            # add your TV (follow the prompts)
-ares-install --device <your-tv-name> dist/org.home.beacon_1.1.1_all.ipk
+ares-install --device <your-tv-name> dist/org.home.beacon_1.1.2_all.ipk
 ```
 
 ### Option C: rooted TV over SSH or telnet
 
 ```bash
-scp dist/org.home.beacon_1.1.1_all.ipk root@<tv-ip>:/tmp/beacon.ipk
+scp dist/org.home.beacon_1.1.2_all.ipk root@<tv-ip>:/tmp/beacon.ipk
 ssh root@<tv-ip> 'luna-send -w 60000 -i luna://com.webos.appInstallService/dev/install "{\"id\":\"org.home.beacon\",\"ipkUrl\":\"/tmp/beacon.ipk\",\"subscribe\":true}"'
 ```
 
@@ -149,6 +149,12 @@ This produces an equivalent package. I haven't tested this route; the PowerShell
   stream, and one with all streams, best first. The app plays the best-only copy. If that stalls for 5 s (a slow
   connection), it switches to the full copy, where the player can step down. If a copy fails, or the service
   can't provide one, it plays the original playlist. The video data always comes straight from JW Player.
+- **Quick pages.** webOS stops an idle service after a few seconds, and starting it again takes about 3 s. The
+  service therefore stays up for 3 minutes after each request, and the app pings it every 2 minutes while it is
+  in front. A video page is drawn at once from the tile that was chosen; the description, buttons and rows fill in
+  when the data arrives. That data is fetched while a tile has focus for 0.3 s, kept for 2 minutes and reused by
+  the player, so it is usually there already. A full-screen "Loading…" only appears when a screen takes longer
+  than 0.4 s.
 - **Older engines.** webOS 6 apps run on Chromium 79 and services on Node.js 8, so the code avoids newer syntax:
   no optional chaining or `??` in the app, and no `fetch` or object spread in the service.
 
@@ -161,7 +167,7 @@ This produces an equivalent package. I haven't tested this route; the PowerShell
 | `app/app.js` | screens, focus navigation for the remote, sign-in form, player |
 | `app/backend.js` | sign-in and tokens, Beacon queries, catalogue index and search, data for each screen |
 | `app/home-query.js` | beacon.tv's home page query (generated) |
-| `service/service.js` | the four service methods `gql`, `token`, `text` and `playlist` |
+| `service/service.js` | the service methods `gql`, `token`, `text`, `playlist` and `ping` |
 | `service/services.json`, `service/package.json` | service registration |
 | `tools/` | build script, query generator, desk test |
 | `dist/` | the built `.ipk` |

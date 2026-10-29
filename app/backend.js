@@ -60,6 +60,7 @@ window.Backend = (function () {
     email = String(email || '').trim();
     return tokenRequest({ grant_type: 'password', username: email, password: String(password || '') }).then(body => {
       auth = { email: email };
+      contentCache.clear();
       keepTokens(body);
       cache.clear();
     }, err => {
@@ -71,6 +72,7 @@ window.Backend = (function () {
     auth = {};
     store('beacon.auth', null);
     cache.clear();
+    contentCache.clear();
   }
   // A valid access token, refreshed shortly before it expires; null when signed out
   function accessToken(forceRefresh) {
@@ -496,7 +498,26 @@ window.Backend = (function () {
     };
   }
 
-  async function content(slug) {
+  // A video page's data, shared by the prefetch (a tile in focus), the page itself and the player; kept for
+  // CONTENT_TTL and forgotten after playback (the progress changed)
+  const CONTENT_TTL = 120000;
+  const contentCache = new Map();   // slug -> { at, promise }
+  function content(slug) {
+    const hit = contentCache.get(slug);
+    if (hit && Date.now() - hit.at < CONTENT_TTL) return hit.promise;
+    const promise = loadContent(slug);
+    contentCache.set(slug, { at: Date.now(), promise: promise });
+    if (contentCache.size > 50) contentCache.delete(contentCache.keys().next().value);
+    promise.catch(() => { if (contentCache.get(slug) && contentCache.get(slug).promise === promise) contentCache.delete(slug); });
+    return promise;
+  }
+  function forgetContent(slug) { contentCache.delete(slug); }
+
+  async function loadContent(slug) {
+    // the next-episode query only needs ids the index already has: start it alongside the video's own query
+    const known = videoBySlug(slug);
+    const nextOf = (seriesId, id) => gql(Q.series, { collection: seriesId, content: id, limit: 1 }).catch(() => null);
+    const early = known && known.series && known.series.isSeries ? nextOf(known.series.id, known.id) : null;
     const r = await gql(Q.content, { slug: slug });
     const doc = r.Contents && r.Contents.docs[0];
     if (!doc) throw new Error('Video not found.');
@@ -507,7 +528,7 @@ window.Backend = (function () {
     const rows = [];
 
     if (series && series.isSeries) {
-      const s = await gql(Q.series, { collection: series.id, content: doc.id, limit: 1 }).catch(() => null);
+      const s = await (early && known.series.id === series.id && known.id === doc.id ? early : nextOf(series.id, doc.id));
       const next = s && s.fetchSeries && s.fetchSeries.next;
       if (next) rows.push({ title: 'Next episode', items: [videoCard(next, level)] });
     }
@@ -568,6 +589,8 @@ window.Backend = (function () {
       captions: captionsOf(video),
     };
   }
+  // Keeps the app's service running (webOS stops it after a few idle seconds, and starting it again takes ~3 s)
+  function keepWarm() { return call('ping', {}, 5000).catch(() => {}); }
   // Local copies of the stream's playlist from the app's service (see service.js): [best stream only, all streams
   // best first]; [] if that fails, then the original is used
   function fullQuality(url) {
@@ -610,7 +633,7 @@ window.Backend = (function () {
 
   return {
     isSignedIn: isSignedIn, signIn: signIn, signOut: signOut, status: status, ensureIndex: ensureIndex,
-    home: home, seriesList: seriesList, collection: collection, content: content, play: play, fullQuality: fullQuality, captionText: captionText,
+    home: home, seriesList: seriesList, collection: collection, content: content, forgetContent: forgetContent, play: play, fullQuality: fullQuality, keepWarm: keepWarm, captionText: captionText,
     search: search, suggest: suggest, progress: progress,
   };
 })();

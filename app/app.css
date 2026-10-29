@@ -70,6 +70,7 @@ html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; backgro
 .detail .meta { font-size: 24px; color: #a796c2; margin-bottom: 22px; }
 .detail .desc { font-size: 25px; line-height: 1.45; color: #d9cdea; max-height: 220px; overflow: hidden; margin-bottom: 30px; }
 .detail .note { font-size: 24px; color: #ffcf8a; margin: 0 0 24px; }
+.detail .pending { font-size: 24px; color: #8f7fab; margin: 6px 0 30px; }
 
 /* collection page */
 .tabs { padding: 0 80px 10px; white-space: nowrap; }

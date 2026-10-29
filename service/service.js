@@ -20,6 +20,34 @@ const TEXT_HOSTS = /(^|\.)(jwplayer\.com|jwpsrv\.com|jwpcdn\.com|jwplatform\.com
 
 const service = new Service(pkg.name);
 
+// webOS ends a service a few seconds after its last request, and starting it again takes ~3 s (measured on the TV),
+// which the app felt on every screen after a pause. So every request (and the app's ping, every 2 minutes while it is
+// in front) keeps it running for KEEP_ALIVE through an activity.
+const KEEP_ALIVE = 3 * 60 * 1000;
+let keepAlive = null;                   // activity that keeps this service running
+let keepAliveTimer = null;
+
+function holdService() {
+  try {
+    if (!keepAlive) {
+      keepAlive = true;   // until the activity arrives
+      service.activityManager.create('keepAlive', (activity) => { keepAlive = activity; });
+    }
+  } catch (e) { /* no activity: the service then just stops when idle, as before */ }
+  clearTimeout(keepAliveTimer);
+  keepAliveTimer = setTimeout(() => {
+    const activity = keepAlive;
+    keepAlive = null;
+    if (activity && activity !== true) service.activityManager.complete(activity, () => {});
+  }, KEEP_ALIVE);
+}
+
+// The app's keep-warm call: {} -> {}
+service.register('ping', (msg) => {
+  holdService();
+  msg.respond({ returnValue: true });
+});
+
 // One HTTPS request; follows redirects (Memberful sends the token request on to members.beacon.tv)
 function request(url, opts, redirects) {
   redirects = redirects || 0;
@@ -53,6 +81,7 @@ const fail = (msg, e) => msg.respond({ returnValue: false, errorText: e.message 
 
 // GraphQL query to Beacon's CMS: { query, variables, token?, supportsDrm? } -> { status, data, errors }
 service.register('gql', (msg) => {
+  holdService();
   const p = msg.payload;
   const headers = {
     'content-type': 'application/json',
@@ -72,6 +101,7 @@ service.register('gql', (msg) => {
 // Memberful token request: { grant_type: 'password', username, password } or { grant_type: 'refresh_token',
 // refresh_token } -> { status, body }. The password is passed on and never kept.
 service.register('token', (msg) => {
+  holdService();
   const p = msg.payload;
   const params = { client_id: CLIENT_ID, grant_type: p.grant_type };
   ['username', 'password', 'refresh_token'].forEach((k) => { if (p[k] !== undefined) params[k] = String(p[k]); });
@@ -83,6 +113,7 @@ service.register('token', (msg) => {
 
 // A caption file from JW Player: { url } -> { status, text }
 service.register('text', (msg) => {
+  holdService();
   const u = urlLib.parse(String(msg.payload.url || ''));
   if (u.protocol !== 'https:' || !TEXT_HOSTS.test(u.hostname || '')) return fail(msg, new Error('host not allowed'));
   request(u.href, {}).then((r) => msg.respond({ returnValue: true, status: r.status, text: r.body }))
@@ -99,11 +130,8 @@ service.register('text', (msg) => {
 //   url   all streams, highest first, so the player can step down (the app switches to it if playback stalls)
 // The streams themselves still come straight from JW Player (their addresses are made absolute).
 const PLAYLIST_TTL = 10 * 60 * 1000;    // the player reads the master playlist once, at the start
-const KEEP_ALIVE = 3 * 60 * 1000;       // webOS ends an idle service after a few seconds; stay up while it's in use
 const playlists = {};                   // id -> { text, expires }
 let server = null;                      // promise of the local port
-let keepAlive = null;                   // activity that keeps this service running
-let keepAliveTimer = null;
 
 // { head, streams }: streams in order of bandwidth, highest first; null if this is no master playlist
 function reorderPlaylist(text, base) {
@@ -151,21 +179,6 @@ function playlistServer() {
     });
   }
   return server;
-}
-
-function holdService() {
-  try {
-    if (!keepAlive) {
-      keepAlive = true;   // until the activity arrives
-      service.activityManager.create('playlist', (activity) => { keepAlive = activity; });
-    }
-  } catch (e) { /* no activity: the playlist is usually read well within the idle time anyway */ }
-  clearTimeout(keepAliveTimer);
-  keepAliveTimer = setTimeout(() => {
-    const activity = keepAlive;
-    keepAlive = null;
-    if (activity && activity !== true) service.activityManager.complete(activity, () => {});
-  }, KEEP_ALIVE);
 }
 
 // A video's master playlist as two local copies:

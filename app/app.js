@@ -12,6 +12,8 @@
   let current = null;      // { onKey, destroy }
   let status = null;       // Backend.status()
   let renderToken = 0;
+  const LOADING_DELAY = 400;   // ms before a slow screen shows "Loading…"
+  const PREFETCH_DELAY = 300;  // ms a video tile has focus before its page data is fetched
 
   // ---------- small DOM helpers ----------
   function h(tag, props, children) {
@@ -52,10 +54,14 @@
   }
   const focusables = () => Array.prototype.filter.call(scope().querySelectorAll('.f'), e => e.offsetParent !== null);
 
+  let prefetchTimer = null;
   function focus(e) {
     if (!e) return;
     e.focus();
     ensureVisible(e);
+    // a video tile that keeps focus briefly: fetch its page now, so opening it is instant
+    clearTimeout(prefetchTimer);
+    if (e._prefetch) prefetchTimer = setTimeout(e._prefetch, PREFETCH_DELAY);
   }
   function ensureVisible(e) {
     const strip = e.closest('.strip');
@@ -118,8 +124,13 @@
     screenEl.innerHTML = '';
     const page = h('div', { class: 'page' });
     screenEl.appendChild(page);
-    page.appendChild(h('div', { class: 'loading', text: 'Loading…' }));
-    Promise.resolve(SCREENS[top.name](page, top.params, current)).then(() => {
+    const done = Promise.resolve(SCREENS[top.name](page, top.params, current));
+    // "Loading…" only for a screen that is slow and shows nothing yet (current.drawn: it draws a first view itself)
+    const loadingTimer = setTimeout(() => {
+      if (token === renderToken && !current.drawn) page.appendChild(h('div', { class: 'loading', text: 'Loading…' }));
+    }, LOADING_DELAY);
+    done.then(() => {
+      clearTimeout(loadingTimer);
       if (token !== renderToken) return;
       const loading = page.querySelector('.loading');
       if (loading) loading.remove();
@@ -129,8 +140,10 @@
       if (!target) target = page.querySelector('.f[data-default]') || focusables().filter(e => !e.closest('.nav'))[0] || focusables()[0];
       focus(target);
     }).catch(err => {
+      clearTimeout(loadingTimer);
       if (token !== renderToken) return;
       page.innerHTML = '';
+      page.className = 'page';
       page.appendChild(nav(top.name));
       page.appendChild(h('div', { class: 'center' }, [
         h('h1', { text: 'Something went wrong' }),
@@ -150,7 +163,7 @@
   }
   function open(item) {
     if (item.kind === 'series') go('collection', { slug: item.slug });
-    else go('detail', { slug: item.slug });
+    else go('detail', { slug: item.slug, item: item });   // the tile's data draws the page at once
   }
   function card(item, key, small) {
     const pic = h('div', { class: 'pic' }, [
@@ -159,8 +172,10 @@
       item.minutes ? h('div', { class: 'dur', text: item.minutes + ' min' }) : (item.count ? h('div', { class: 'dur', text: item.count + ' videos' }) : null),
       item.progress > 0.01 ? h('div', { class: 'bar', style: 'width:' + Math.round(item.progress * 100) + '%' }) : null,
     ]);
-    return fh('div', 'card' + (item.kind === 'series' ? ' series' : '') + (small ? ' small' : ''), key, () => open(item),
+    const el = fh('div', 'card' + (item.kind === 'series' ? ' series' : '') + (small ? ' small' : ''), key, () => open(item),
       [pic, h('div', { class: 't', text: item.title }), item.subtitle ? h('div', { class: 's', text: item.subtitle }) : null]);
+    if (item.kind !== 'series') el._prefetch = () => { B.content(item.slug).catch(() => {}); };
+    return el;
   }
   function row(r, key, small) {
     return h('div', { class: 'row' }, [
@@ -249,13 +264,32 @@
   });
 
   // ---------- details of one video ----------
-  SCREENS.detail = (page, p) => B.content(p.slug).then(d => {
+  // Drawn at once from the tile that was opened (p.item: title, picture, series, length); the description, buttons
+  // and rows follow when the page data is there (usually fetched already while the tile had focus)
+  SCREENS.detail = (page, p, ctx) => {
+    const it = p.item || {};
     page.className = 'page detail';
-    page.appendChild(h('div', { class: 'bg', style: d.image ? 'background-image:url("' + d.image + '")' : '' }));
+    // the tile's picture at the background's size (Cloudflare Images URL, see img() in backend.js)
+    const bg = h('div', { class: 'bg', style: it.image ? 'background-image:url("' + it.image.replace(/width=\d+/, 'width=1280') + '")' : '' });
+    page.appendChild(bg);
     page.appendChild(h('div', { class: 'shade' }));
     page.appendChild(nav(''));
     const sc = h('div', { class: 'scroll', style: 'top:0' });
     page.appendChild(sc);
+    const seriesEl = h('div', { class: 'series', text: it.subtitle || '' });
+    seriesEl.hidden = !it.subtitle;
+    const titleEl = h('h1', { text: it.title || '' });
+    const metaEl = h('div', { class: 'meta', text: it.minutes ? it.minutes + ' min' : '' });
+    const rest = h('div', {}, [h('div', { class: 'pending', text: 'Loading…' })]);
+    sc.appendChild(h('div', { class: 'info' }, [seriesEl, titleEl, metaEl, rest]));
+    ctx.drawn = true;
+    return B.content(p.slug).then(d => fillDetail(d, { bg: bg, sc: sc, seriesEl: seriesEl, titleEl: titleEl, metaEl: metaEl, rest: rest }));
+  };
+  function fillDetail(d, el) {
+    if (d.image) el.bg.style.backgroundImage = 'url("' + d.image + '")';
+    el.seriesEl.textContent = d.series ? d.series.title : '';
+    el.seriesEl.hidden = !d.series;
+    el.titleEl.textContent = d.title;
     const buttons = [];
     if (d.playable) {
       if (d.resumeAt > 30) {
@@ -266,19 +300,17 @@
       }
     }
     if (d.series) buttons.push(fh('div', 'btn', 'series', () => go('collection', { slug: d.series.slug }), ['All episodes'], buttons.length ? null : { 'data-default': '1' }));
-    const meta = [d.minutes ? d.minutes + ' min' : '', d.released ? new Date(d.released).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '', d.tier === 'Free' ? 'Free' : ''].filter(Boolean).join('  ·  ');
-    sc.appendChild(h('div', { class: 'info' }, [
-      d.series ? h('div', { class: 'series', text: d.series.title }) : null,
-      h('h1', { text: d.title }),
-      h('div', { class: 'meta', text: meta }),
+    el.metaEl.textContent = [d.minutes ? d.minutes + ' min' : '', d.released ? new Date(d.released).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '', d.tier === 'Free' ? 'Free' : ''].filter(Boolean).join('  ·  ');
+    el.rest.innerHTML = '';
+    [
       d.description ? h('div', { class: 'desc', text: d.description }) : null,
       d.signInNeeded ? h('div', { class: 'note', text: 'This video is for members. Sign in under Settings to watch it.' }) :
         (!d.playable ? h('div', { class: 'note', text: 'This video is not included in your membership.' }) : null),
       h('div', {}, buttons),
-    ]));
-    d.rows.forEach((r, i) => sc.appendChild(row(r, 'r' + i)));
-    if (!buttons.length) { const first = sc.querySelector('.card'); if (first) first.setAttribute('data-default', '1'); }
-  });
+    ].forEach(c => { if (c) el.rest.appendChild(c); });
+    d.rows.forEach((r, i) => el.sc.appendChild(row(r, 'r' + i)));
+    if (!buttons.length) { const first = el.sc.querySelector('.card'); if (first) first.setAttribute('data-default', '1'); }
+  }
 
   // ---------- search ----------
   SCREENS.search = (page, p, ctx) => {
@@ -435,9 +467,11 @@
 
   function startPlayback(slug, opts) {
     opts = opts || {};
-    B.play(slug).then(d => {
+    // the page data (title, next episode) is usually there already from the detail page
+    Promise.all([B.play(slug), B.content(slug).catch(() => null)]).then(r => {
+      const d = r[0];
       if (!d || !d.url) throw new Error(B.isSignedIn() ? 'This video is not included in your membership.' : 'This video is for members only.');
-      return B.content(slug).catch(() => null).then(info => openPlayer(slug, d, info, opts));
+      openPlayer(slug, d, r[1], opts);
     }).catch(err => toast(err.message));
   }
 
@@ -486,6 +520,7 @@
     report(true);
     clearTimeout(P.stall);
     P.sources = [];
+    B.forgetContent(P.slug);   // its resume point changed
     P.video.pause();
     P.video.removeAttribute('src');
     P.video.load();
@@ -689,6 +724,10 @@
 
   // ---------- start ----------
   B.ensureIndex().catch(() => {});   // build or refresh the search index in the background
+  // keep the app's service running while the app is in front (see keepWarm in backend.js)
+  B.keepWarm();
+  setInterval(() => { if (!document.hidden) B.keepWarm(); }, 120000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) B.keepWarm(); });
   refreshStatus().catch(() => { status = { signedIn: B.isSignedIn(), user: null, catalog: { videos: 0 } }; })
     .then(() => root(B.isSignedIn() ? 'home' : 'signin'));
 })();
