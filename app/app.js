@@ -653,6 +653,14 @@
       if (left <= 0) playNext();
     }, 1000);
   });
+  // Pause during the countdown stops it; the next episode then waits for "Play now" (or Play)
+  function holdNext() {
+    if (!P.nextTimer) return false;
+    clearInterval(P.nextTimer);
+    P.nextTimer = null;
+    P.upnext.firstChild.textContent = 'Next episode (paused)';
+    return true;
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && !P.el.hidden) { report(true); P.video.pause(); }
   });
@@ -664,6 +672,11 @@
       if (!P.upnext.hidden) { clearInterval(P.nextTimer); P.upnext.hidden = true; closePlayer(); return; }
       if (onButtons && k !== KEY.STOP) { document.activeElement.blur(); P.el.classList.remove('osd'); return; }
       closePlayer();
+      return;
+    }
+    if (!P.upnext.hidden && (k === KEY.PLAY || k === KEY.PAUSE || k === KEY.PLAYPAUSE)) {
+      // Pause stops the countdown; Play (or Play/Pause once it is stopped) starts the next episode now
+      if (k === KEY.PAUSE || (k === KEY.PLAYPAUSE && P.nextTimer)) holdNext(); else playNext();
       return;
     }
     if (k === KEY.PLAY || k === KEY.PAUSE || k === KEY.PLAYPAUSE) { togglePlay(); return; }

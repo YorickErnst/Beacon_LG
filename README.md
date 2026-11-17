@@ -21,7 +21,7 @@ official Beacon app. Everything runs on the TV itself: no proxy server, no Docke
   - resume;
   - watch progress synced with beacon.tv (so *Continue watching* matches everywhere);
   - subtitles;
-  - a countdown to the next episode.
+  - a countdown to the next episode. Pause stops it; Play or *Play now* starts the episode.
 - **Sign-in** with your Beacon email and password, using the TV's on-screen keyboard or a USB keyboard. The password
   is not stored, only sign-in tokens, which renew automatically. You stay signed in across reboots.
 - Free videos work without signing in.
@@ -40,26 +40,26 @@ official Beacon app. Everything runs on the TV itself: no proxy server, no Docke
 
 ## Install
 
-The ready-made package is in [`dist/`](dist/): `org.home.beacon_1.1.2_all.ipk`.
+The ready-made package is in [`dist/`](dist/): `org.home.beacon_1.1.3_all.ipk`.
 
 ### Option A: webOS Dev Manager (easiest)
 
 1. Install [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop) on your computer.
 2. Add your TV: a rooted TV, or Developer Mode with the passphrase from LG's Developer Mode app.
-3. Open *Apps* → *Install*, choose `dist/org.home.beacon_1.1.2_all.ipk`.
+3. Open *Apps* → *Install*, choose `dist/org.home.beacon_1.1.3_all.ipk`.
 
 ### Option B: LG's command-line tools (Developer Mode or rooted)
 
 ```bash
 npm install -g @webos-tools/cli
 ares-setup-device            # add your TV (follow the prompts)
-ares-install --device <your-tv-name> dist/org.home.beacon_1.1.2_all.ipk
+ares-install --device <your-tv-name> dist/org.home.beacon_1.1.3_all.ipk
 ```
 
 ### Option C: rooted TV over SSH or telnet
 
 ```bash
-scp dist/org.home.beacon_1.1.2_all.ipk root@<tv-ip>:/tmp/beacon.ipk
+scp dist/org.home.beacon_1.1.3_all.ipk root@<tv-ip>:/tmp/beacon.ipk
 ssh root@<tv-ip> 'luna-send -w 60000 -i luna://com.webos.appInstallService/dev/install "{\"id\":\"org.home.beacon\",\"ipkUrl\":\"/tmp/beacon.ipk\",\"subscribe\":true}"'
 ```
 
