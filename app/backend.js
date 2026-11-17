@@ -329,6 +329,35 @@ window.Backend = (function () {
   // The same episode in another form: the Cooldown, Abridged, ... of "C4 E040"
   const otherVersions = (video) => video && video.code ? videos.filter(v => v.code === video.code && v.id !== video.id) : [];
 
+  // Aftershows: a Cooldown is the talk show after an episode, not a series of its own (one "Critical Role Cooldown"
+  // series holds them for every show, numbered on its own). After one, the next episode is the one after the episode
+  // it belongs to: C4 E020 Cooldown -> C4 E021.
+  const AFTERSHOW_SERIES = ['critical-cooldown'];
+  const RECAP_SERIES = ['critical-role-abridged'];   // other versions of an episode, not the episode itself
+  const COOLDOWN_PART = /\|\s*cooldown\s*(?=\||$)/i;
+  const seriesOf = (v) => v.series || v.primaryCollection || null;
+  const inSeries = (v, slugs) => Boolean(seriesOf(v) && slugs.indexOf(seriesOf(v).slug) >= 0);
+  const isAftershow = (v) => Boolean(v && (inSeries(v, AFTERSHOW_SERIES) || COOLDOWN_PART.test(v.title || '')));
+  // The episode an aftershow belongs to: the same episode code ("c4e20"), else the same title without "| Cooldown"
+  // ("Winds of Change | Shattered Legends | Episode 1 | Cooldown")
+  function aftershowOf(video) {
+    if (!isAftershow(video)) return null;
+    const main = (v) => v.id !== video.id && !isAftershow(v) && !inSeries(v, RECAP_SERIES);
+    const code = video.code || codeOfTitle(video.title);
+    const byCode = code ? videos.find(v => v.code === code && main(v)) : null;
+    if (byCode) return byCode;
+    const bare = normalize(String(video.title || '').replace(COOLDOWN_PART, ''));
+    return videos.find(v => main(v) && v.norm === bare) || null;
+  }
+  // What follows an aftershow: the episode after the one it belongs to, if that is part of a series
+  function afterAftershow(video) {
+    const parent = aftershowOf(video);
+    if (!parent || !parent.series || !parent.series.isSeries) return null;
+    const list = seriesVideos(parent.series.id);
+    const i = list.findIndex(v => v.id === parent.id);
+    return i >= 0 ? list[i + 1] || null : null;
+  }
+
   // ---------- what the screens show ----------
   // Cloudflare Images URLs end in "/format=auto"; ask for the size we show
   const img = (url, width) => url ? (url.indexOf('format=auto') >= 0 ? url.replace(/format=auto(,width=\d+)?/, 'format=auto,width=' + width) : url) : null;
@@ -424,17 +453,27 @@ window.Backend = (function () {
       const unfinished = docs.filter(d => (d.videoProgress || 0) < 92);
       if (unfinished.length) rows.push({ title: 'Continue watching', items: unfinished.map(d => videoCard(d.content, level, progress)) });
 
-      // Next up: for series whose last watched episode is finished, the episode after it
+      // Next up: for series whose last watched episode is finished, the episode after it. An aftershow counts for
+      // the series of the episode it belongs to, finished or not (its rest is under Continue watching)
       const next = [];
       const seenSeries = new Set();
       for (const d of docs) {
-        const s = d.content.primaryCollection;
-        if (!s || seenSeries.has(s.id)) continue;
-        seenSeries.add(s.id);
-        if ((d.videoProgress || 0) < 92) continue;
-        const list = seriesVideos(s.id);
-        const i = list.findIndex(v => v.id === d.content.id);
-        const candidate = i >= 0 ? list[i + 1] : null;
+        let candidate = null;
+        if (isAftershow(d.content)) {
+          const watched = videoBySlug(d.content.slug) || d.content;
+          const parent = aftershowOf(watched);
+          if (!parent || !parent.series || seenSeries.has(parent.series.id)) continue;
+          seenSeries.add(parent.series.id);
+          candidate = afterAftershow(watched);
+        } else {
+          const s = d.content.primaryCollection;
+          if (!s || seenSeries.has(s.id)) continue;
+          seenSeries.add(s.id);
+          if ((d.videoProgress || 0) < 92) continue;
+          const list = seriesVideos(s.id);
+          const i = list.findIndex(v => v.id === d.content.id);
+          candidate = i >= 0 ? list[i + 1] : null;
+        }
         if (candidate && !docs.some(x => x.content.id === candidate.id)) next.push(candidate);
         if (next.length >= 12) break;
       }
@@ -517,7 +556,7 @@ window.Backend = (function () {
     // the next-episode query only needs ids the index already has: start it alongside the video's own query
     const known = videoBySlug(slug);
     const nextOf = (seriesId, id) => gql(Q.series, { collection: seriesId, content: id, limit: 1 }).catch(() => null);
-    const early = known && known.series && known.series.isSeries ? nextOf(known.series.id, known.id) : null;
+    const early = known && known.series && known.series.isSeries && !isAftershow(known) ? nextOf(known.series.id, known.id) : null;
     const r = await gql(Q.content, { slug: slug });
     const doc = r.Contents && r.Contents.docs[0];
     if (!doc) throw new Error('Video not found.');
@@ -527,7 +566,11 @@ window.Backend = (function () {
     const series = doc.primaryCollection;
     const rows = [];
 
-    if (series && series.isSeries) {
+    if (isAftershow(doc)) {
+      // not the next Cooldown (of whatever show), but the episode after the one this Cooldown is about
+      const after = afterAftershow(videoBySlug(slug) || doc);
+      if (after) rows.push({ title: 'Next episode', items: [videoCard(after, level)] });
+    } else if (series && series.isSeries) {
       const s = await (early && known.series.id === series.id && known.id === doc.id ? early : nextOf(series.id, doc.id));
       const next = s && s.fetchSeries && s.fetchSeries.next;
       if (next) rows.push({ title: 'Next episode', items: [videoCard(next, level)] });

@@ -14,6 +14,8 @@ official Beacon app. Everything runs on the TV itself: no proxy server, no Docke
 - **Series** and collections, with season tabs, episode progress bars, and a jump to the first unwatched episode.
 - **Episode pages** with resume or start-over. They also suggest the next episode, other versions of the same
   episode (Cooldown, Abridged…), more from the series, and Beacon's recommendations.
+  A Cooldown counts as part of the episode it follows: after the C4 E020 Cooldown, the next episode is C4 E021,
+  not the next Cooldown. This holds on Home, on the episode page and in the player's countdown.
 - **Search** that forgives typos ("exandria unlimted"), finds partial words, series names and episode codes
   (`c4e12`, "campaign 4 episode 12"), with suggestions while you type.
 - **Player** that uses the TV's own video player:
@@ -40,26 +42,26 @@ official Beacon app. Everything runs on the TV itself: no proxy server, no Docke
 
 ## Install
 
-The ready-made package is in [`dist/`](dist/): `org.home.beacon_1.1.3_all.ipk`.
+The ready-made package is in [`dist/`](dist/): `org.home.beacon_1.1.4_all.ipk`.
 
 ### Option A: webOS Dev Manager (easiest)
 
 1. Install [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop) on your computer.
 2. Add your TV: a rooted TV, or Developer Mode with the passphrase from LG's Developer Mode app.
-3. Open *Apps* → *Install*, choose `dist/org.home.beacon_1.1.3_all.ipk`.
+3. Open *Apps* → *Install*, choose `dist/org.home.beacon_1.1.4_all.ipk`.
 
 ### Option B: LG's command-line tools (Developer Mode or rooted)
 
 ```bash
 npm install -g @webos-tools/cli
 ares-setup-device            # add your TV (follow the prompts)
-ares-install --device <your-tv-name> dist/org.home.beacon_1.1.3_all.ipk
+ares-install --device <your-tv-name> dist/org.home.beacon_1.1.4_all.ipk
 ```
 
 ### Option C: rooted TV over SSH or telnet
 
 ```bash
-scp dist/org.home.beacon_1.1.3_all.ipk root@<tv-ip>:/tmp/beacon.ipk
+scp dist/org.home.beacon_1.1.4_all.ipk root@<tv-ip>:/tmp/beacon.ipk
 ssh root@<tv-ip> 'luna-send -w 60000 -i luna://com.webos.appInstallService/dev/install "{\"id\":\"org.home.beacon\",\"ipkUrl\":\"/tmp/beacon.ipk\",\"subscribe\":true}"'
 ```
 

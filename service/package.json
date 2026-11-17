@@ -1,6 +1,6 @@
 {
     "name": "org.home.beacon.service",
-    "version": "1.1.3",
+    "version": "1.1.4",
     "description": "Beacon app: calls to Beacon's CMS and sign-in",
     "main": "service.js"
 }
